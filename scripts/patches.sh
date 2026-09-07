@@ -108,6 +108,15 @@ susfs_apply() {
 		}
 	fi
 
+	# 4. Apply compatibility stubs for legacy trees (e.g. 4.14 rsuntk)
+	local compat_patch="${REPO_ROOT}/patches/susfs-1.5.5-compat.patch"
+	if [ -f "$compat_patch" ]; then
+		info "applying SUSFS 1.5.5 compatibility stubs"
+		( cd "$KERNEL_DIR" && apply_patch "$compat_patch" 1 ) \
+			|| die "failed to apply SUSFS compatibility patch"
+	fi
+
+
 	# Record the SUSFS version for the build summary.
 	local sv
 	sv=$(sed -nE 's/.*SUSFS_VERSION[[:space:]]+"([^"]+)".*/\1/p' \
