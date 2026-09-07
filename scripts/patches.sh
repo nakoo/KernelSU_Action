@@ -116,6 +116,12 @@ susfs_apply() {
 			|| die "failed to apply SUSFS compatibility patch"
 	fi
 
+        # Disable broken floral dtbo targets
+        local dtbo_patch="${REPO_ROOT}/patches/disable-floral-dtbo.patch"
+        if [ -f "$dtbo_patch" ]; then
+        	info "applying disable-floral-dtbo.patch"
+        	( cd "$KERNEL_DIR" && apply_patch "$dtbo_patch" 1 ) || warn "failed to apply disable-floral-dtbo.patch"
+        fi
 
 	# Record the SUSFS version for the build summary.
 	local sv
