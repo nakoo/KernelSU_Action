@@ -54,10 +54,10 @@ index ef31283..95c1760 100644
  #define SUSFS_VARIANT "NON-GKI"
  #else
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
-index 7442047..5bc6a13 100644
+index 7442047..280cd62 100644
 --- a/include/linux/susfs_def.h
 +++ b/include/linux/susfs_def.h
-@@ -24,6 +24,32 @@
+@@ -24,6 +24,23 @@
  #define CMD_SUSFS_SHOW_SUS_SU_WORKING_MODE 0x555e4
  #define CMD_SUSFS_IS_SUS_SU_READY 0x555f0
  #define CMD_SUSFS_SUS_SU 0x60000
@@ -78,15 +78,6 @@ index 7442047..5bc6a13 100644
 +static inline int susfs_set_i_state_on_external_dir(void __user **arg) { return 0; }
 +static inline int susfs_add_sus_map(void __user **arg) { return 0; }
 +static inline int susfs_set_avc_log_spoofing(void __user **arg) { return 0; }
-+
-+/* Map rsuntk's double-pointer calls (void **arg) to SUSFS 1.5.5 single-pointer signatures */
-+#define susfs_add_sus_path(arg) susfs_add_sus_path((void __user *)*(arg))
-+#define susfs_add_sus_kstat(arg) susfs_add_sus_kstat((void __user *)*(arg))
-+#define susfs_update_sus_kstat(arg) susfs_update_sus_kstat((void __user *)*(arg))
-+#define susfs_add_try_umount(arg) susfs_add_try_umount((void __user *)*(arg))
-+#define susfs_set_uname(arg) susfs_set_uname((void __user *)*(arg))
-+#define susfs_set_cmdline_or_bootconfig(arg) susfs_set_cmdline_or_bootconfig((void __user *)*(arg))
-+#define susfs_add_open_redirect(arg) susfs_add_open_redirect((void __user *)*(arg))
  
  #define SUSFS_MAX_LEN_PATHNAME 256 // 256 should address many paths already unless you are doing some strange experimental stuff, then set your own desired length
  #define SUSFS_FAKE_CMDLINE_OR_BOOTCONFIG_SIZE 4096

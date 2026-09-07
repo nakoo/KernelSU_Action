@@ -123,6 +123,12 @@ susfs_apply() {
         	( cd "$KERNEL_DIR" && apply_patch "$dtbo_patch" 1 ) || warn "failed to apply disable-floral-dtbo.patch"
         fi
 
+        # Fix rsuntk passing 'arg' instead of 'argp' to susfs in supercalls.c
+	if [ -f "$KERNEL_DIR/drivers/kernelsu/supercalls.c" ]; then
+		sed -i 's/susfs_\([a-z_]*\)(arg)/susfs_\1(argp)/g' "$KERNEL_DIR/drivers/kernelsu/supercalls.c"
+	fi
+
+
 	# Record the SUSFS version for the build summary.
 	local sv
 	sv=$(sed -nE 's/.*SUSFS_VERSION[[:space:]]+"([^"]+)".*/\1/p' \
