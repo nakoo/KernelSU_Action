@@ -42,6 +42,7 @@ susfs_branch_for() {
 susfs_apply() {
 	local repo=${SUSFS_REPO:-https://gitlab.com/simonpunk/susfs4ksu.git}
 	local branch=${SUSFS_BRANCH:-auto}
+	local variant=${KSU_VARIANT:-none}
 	local kver
 	kver=$(kernel_version "$KERNEL_DIR") || die "cannot read kernel version from ${KERNEL_DIR}/Makefile"
 
@@ -108,26 +109,30 @@ susfs_apply() {
 		}
 	fi
 
-	# 4. Apply compatibility stubs for legacy trees (e.g. 4.14 rsuntk)
-	local compat_patch="${REPO_ROOT}/patches/susfs-1.5.5-compat.patch"
-	if [ -f "$compat_patch" ]; then
-		info "applying SUSFS 1.5.5 compatibility stubs"
-		( cd "$KERNEL_DIR" && apply_patch "$compat_patch" 1 ) \
-			|| die "failed to apply SUSFS compatibility patch"
+	# 4. RSUNTK-specific fixes (ignored for KernelSU-Next or official KSU).
+	# rsuntk's supercalls.c passes the raw 'arg' pointer to the susfs_* helpers
+	# instead of the intended 'argp', and it needs the 1.5.5 compat stubs since
+	# it hasn't caught up to the SUS_MAP-era susfs.h layout yet.
+	if [ "$variant" = "rsuntk" ]; then
+		local compat_patch="${REPO_ROOT}/patches/susfs-1.5.5-compat.patch"
+		if [ -f "$compat_patch" ]; then
+			info "Applying SUSFS 1.5.5 compatibility stubs for rsuntk"
+			( cd "$KERNEL_DIR" && apply_patch "$compat_patch" 1 ) || warn "failed to apply SUSFS compatibility patch (rsuntk)"
+		fi
+
+		# Fix rsuntk passing 'arg' instead of 'argp' to susfs in supercalls.c
+		if [ -f "$KERNEL_DIR/drivers/kernelsu/supercalls.c" ]; then
+			info "Fixing rsuntk supercalls.c argument pointer bug"
+			sed -i 's/susfs_\([a-z_]*\)(arg)/susfs_\1(argp)/g' "$KERNEL_DIR/drivers/kernelsu/supercalls.c"
+		fi
 	fi
 
-        # Disable broken floral dtbo targets
-        local dtbo_patch="${REPO_ROOT}/patches/disable-floral-dtbo.patch"
-        if [ -f "$dtbo_patch" ]; then
-        	info "applying disable-floral-dtbo.patch"
-        	( cd "$KERNEL_DIR" && apply_patch "$dtbo_patch" 1 ) || warn "failed to apply disable-floral-dtbo.patch"
-        fi
-
-        # Fix rsuntk passing 'arg' instead of 'argp' to susfs in supercalls.c
-	if [ -f "$KERNEL_DIR/drivers/kernelsu/supercalls.c" ]; then
-		sed -i 's/susfs_\([a-z_]*\)(arg)/susfs_\1(argp)/g' "$KERNEL_DIR/drivers/kernelsu/supercalls.c"
+	# 5. Disable broken floral/coral dtbo targets.
+	local dtbo_patch="${REPO_ROOT}/patches/disable-floral-dtbo.patch"
+	if [ -f "$dtbo_patch" ]; then
+		info "applying disable-floral-dtbo.patch"
+		( cd "$KERNEL_DIR" && apply_patch "$dtbo_patch" 1 ) || warn "failed to apply disable-floral-dtbo.patch (skipping)"
 	fi
-
 
 	# Record the SUSFS version for the build summary.
 	local sv
@@ -150,7 +155,10 @@ susfs_is_bundled() {
 	done
 	# Fall back to inspecting the tree, which is authoritative.
 	local ksu_dir="${KERNEL_DIR}/${KSU_DIR:-KernelSU}"
-	[ -d "$ksu_dir" ] && grep -rqs 'CONFIG_KSU_SUSFS\|config KSU_SUSFS' "${ksu_dir}/kernel/Kconfig" 2>/dev/null
+	if [ -d "$ksu_dir" ]; then
+		grep -rqs 'CONFIG_KSU_SUSFS\|config KSU_SUSFS' "$ksu_dir" 2>/dev/null && return 0
+	fi
+	return 1
 }
 
 susfs_defconfig() {
@@ -172,6 +180,9 @@ susfs_defconfig() {
 			"$ksu_dir" "${KERNEL_DIR}/fs/Kconfig" "${KERNEL_DIR}/drivers/kernelsu" 2>/dev/null \
 		| awk '{print $2}' | sort -u)
 
+	# STRICT CHECK: if no symbols exist, SUSFS never actually hooked into
+	# KernelSU (patch 3 above silently no-op'd, or the tree is unpatched).
+	# Abort rather than ship a kernel that looks patched but hides nothing.
 	if [ -z "$syms" ]; then
 		die "found no KSU_SUSFS Kconfig symbols to enable.
        The SUSFS sources are in the tree but nothing declares its options, so
@@ -225,7 +236,7 @@ path_umount_apply() {
 
 	local anchor='Now umount can handle mount points as well as block devices'
 	grep -q "$anchor" "$ns" \
-		|| die "could not find the insertion point in fs/namespace.c; patch this kernel manually"
+		|| { warn "could not find the insertion point in fs/namespace.c; skipping path_umount backport for this tree"; endgroup; return 0; }
 
 	local snippet
 	snippet=$(mktemp)
@@ -354,7 +365,7 @@ hooks_patch_apply() {
 
 	# Fall back to the in-repo sed script, which is what this action shipped
 	# historically and still works for the 4.9-5.4 KernelSU 0.9.x hook API.
-	info "falling back to the bundled legacy hook script"
+	info "falling back to the bundled legacy hook script (kernel ${kver})"
 	( cd "$KERNEL_DIR" && bash "${REPO_ROOT}/patches/legacy_ksu_hooks.sh" )
 	endgroup
 }
