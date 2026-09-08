@@ -363,6 +363,18 @@ hooks_patch_apply() {
 		done
 	fi
 
+	# rsuntk/KernelSU already hooks manually and unconditionally on Non-GKI
+	# kernels -- the susfs-rksu-master branch specifically no longer even
+	# needs CONFIG_KSU_MANUAL_HOOK to enable it, hooking is baked into the
+	# source. The legacy sed script below targets the old flat KernelSU
+	# 0.9.x hook API and knows nothing about rsuntk's own hook insertion, so
+	# running it here would patch hook code on top of hook code already
+	# present -- silently, since apply failures aren't checked. Skip it.
+	if [ "$variant" = "rsuntk" ]; then
+		info "rsuntk hooks manually and unconditionally on Non-GKI kernels; skipping the legacy hook script to avoid double-hooking"
+		endgroup; return 0
+	fi
+
 	# Fall back to the in-repo sed script, which is what this action shipped
 	# historically and still works for the 4.9-5.4 KernelSU 0.9.x hook API.
 	info "falling back to the bundled legacy hook script (kernel ${kver})"
